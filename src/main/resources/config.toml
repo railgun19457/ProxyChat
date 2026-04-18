@@ -1,0 +1,34 @@
+[meta]
+config-version = 1
+
+[update]
+check = true
+notify-admins = true
+
+[logging]
+print-chat = true
+debug = false
+
+[chat]
+enabled = true
+format = "<gray>[{server}]</gray> <white>{player}</white><dark_gray>:</dark_gray> <white>{message}</white>"
+
+[server-alias]
+enabled = false
+
+[server-alias.map]
+lobby = "Lobby"
+survival = "Survival"
+
+[join-leave]
+enabled = true
+first-join = "<green>+ <white>{player}</white> <gray>进入了 <gold>{server}</gold></gray>"
+switch-server = "<yellow>* <white>{player}</white> <gray>从 <gold>{from}</gold> 切换到 <gold>{to}</gold></gray>"
+leave = "<red>- <white>{player}</white> <gray>离开了网络</gray>"
+
+[at]
+enabled = true
+notify-title = "<gold>@ 提醒</gold>"
+notify-message = "<yellow>{player}</yellow> <gray>点名你:</gray> <white>{message}</white>"
+notify-action-bar = "<gold>@{player}</gold> <white>{message}</white>"
+sound-enabled = true
