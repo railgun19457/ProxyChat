@@ -1,10 +1,9 @@
 [messages]
-# 这里只保留不在 config.toml 中重复定义的通用提示文本。
 reload-success = "<green>ProxyChat 配置重载成功。</green>"
 reload-failed = "<red>ProxyChat 配置重载失败，请检查控制台日志。</red>"
 reload-usage = "<yellow>用法: /proxychat reload 或 /pc reload</yellow>"
 no-permission = "<red>你没有权限执行该命令。</red>"
-at-usage = "<yellow>用法: /at <玩家> <内容></yellow>"
+at-usage = "<yellow>用法: /at [玩家] [可选消息内容]</yellow>"
 at-disabled = "<red>AT 功能当前已关闭。</red>"
 player-not-found = "<red>未找到玩家: {player}</red>"
 update-available = "<yellow>发现新版本: <white>{current}</white> -> <green>{latest}</green></yellow>"

@@ -2,12 +2,14 @@ package io.github.railgun19457.proxychat;
 
 import io.github.railgun19457.proxychat.model.MessageConfig;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
+import io.github.railgun19457.proxychat.service.PluginLogger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
-import org.slf4j.Logger;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.tomlj.Toml;
+import org.tomlj.TomlArray;
 import org.tomlj.TomlParseError;
 import org.tomlj.TomlParseResult;
 import org.tomlj.TomlTable;
@@ -19,24 +21,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.Locale;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public final class ConfigManager {
     private static final String CONFIG_FILE_NAME = "config.toml";
     private static final String MESSAGE_FILE_NAME = "message.toml";
 
-    private final Logger logger;
+    private final PluginLogger pluginLogger;
     private final Path dataDirectory;
     private final MiniMessage miniMessage;
 
     private volatile RuntimeConfig runtimeConfig;
     private volatile MessageConfig messageConfig;
 
-    public ConfigManager(Logger logger, Path dataDirectory) {
-        this.logger = logger;
+    public ConfigManager(PluginLogger pluginLogger, Path dataDirectory) {
+        this.pluginLogger = pluginLogger;
         this.dataDirectory = dataDirectory;
         this.miniMessage = MiniMessage.miniMessage();
     }
@@ -56,10 +63,15 @@ public final class ConfigManager {
             MessageConfig newMessageConfig = parseMessageConfig(dataDirectory.resolve(MESSAGE_FILE_NAME));
             this.runtimeConfig = newRuntimeConfig;
             this.messageConfig = newMessageConfig;
-            logger.info("[ProxyChat] Configuration reloaded successfully.");
+            pluginLogger.applyRuntime(newRuntimeConfig);
+            pluginLogger.info(
+                    PluginLogger.Topic.CONFIG,
+                    "Configuration reloaded successfully. config-version={}",
+                    newRuntimeConfig.configVersion()
+            );
             return true;
         } catch (Exception ex) {
-            logger.error("[ProxyChat] Failed to reload configuration. Keeping previous snapshot.", ex);
+            pluginLogger.error(PluginLogger.Topic.CONFIG, "Failed to reload configuration. Keeping previous snapshot.", ex);
             return false;
         }
     }
@@ -81,33 +93,36 @@ public final class ConfigManager {
     }
 
     public Component render(String template, Map<String, String> placeholders, Map<String, Component> componentPlaceholders) {
-        String content = template == null ? "" : template;
+        Map<String, String> safePlaceholders = placeholders == null ? Map.of() : placeholders;
+        Map<String, Component> safeComponentPlaceholders = componentPlaceholders == null ? Map.of() : componentPlaceholders;
+        String content = normalizePlaceholderSyntax(template == null ? "" : template, safePlaceholders, safeComponentPlaceholders);
+
         List<TagResolver> resolvers = new ArrayList<>();
+        for (Map.Entry<String, String> entry : safePlaceholders.entrySet()) {
+            resolvers.add(Placeholder.unparsed(entry.getKey(), entry.getValue() == null ? "" : entry.getValue()));
+        }
+        for (Map.Entry<String, Component> entry : safeComponentPlaceholders.entrySet()) {
+            resolvers.add(Placeholder.component(entry.getKey(), entry.getValue() == null ? Component.empty() : entry.getValue()));
+        }
 
-        if (placeholders != null) {
-            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-                resolvers.add(Placeholder.unparsed(entry.getKey(), entry.getValue() == null ? "" : entry.getValue()));
+        try {
+            if (resolvers.isEmpty()) {
+                return miniMessage.deserialize(content);
             }
+            return miniMessage.deserialize(content, TagResolver.resolver(resolvers));
+        } catch (Exception ex) {
+            pluginLogger.warn(
+                    PluginLogger.Topic.CONFIG,
+                    "Failed to parse MiniMessage template. Falling back to plain text. template={}",
+                    content,
+                    ex
+            );
+            return Component.text(renderPlainFallback(content, safePlaceholders, safeComponentPlaceholders));
         }
-
-        if (componentPlaceholders != null) {
-            for (Map.Entry<String, Component> entry : componentPlaceholders.entrySet()) {
-                resolvers.add(Placeholder.component(entry.getKey(), entry.getValue() == null ? Component.empty() : entry.getValue()));
-            }
-        }
-
-        if (resolvers.isEmpty()) {
-            return miniMessage.deserialize(content);
-        }
-
-        return miniMessage.deserialize(content, TagResolver.resolver(resolvers));
     }
 
     public void debug(String message, Object... args) {
-        RuntimeConfig snapshot = runtimeConfig;
-        if (snapshot != null && snapshot.loggingDebug()) {
-            logger.info("[ProxyChat/Debug] " + message, args);
-        }
+        pluginLogger.debug(PluginLogger.Topic.CONFIG, message, args);
     }
 
     private void ensureDefaultFile(String resourceName) throws IOException {
@@ -134,11 +149,16 @@ public final class ConfigManager {
             for (String key : table.keySet()) {
                 Object value = table.get(key);
                 if (value instanceof String str) {
-                    aliasMap.put(key, str);
-                    aliasComponentMap.put(key, str.isBlank() ? Component.text(key) : miniMessage.deserialize(str));
+                    String normalizedKey = key.toLowerCase(Locale.ROOT);
+                    aliasMap.put(normalizedKey, str);
+                    aliasComponentMap.put(normalizedKey, parseAliasComponent(key, str));
                 }
             }
         }
+
+        Map<String, Boolean> chatRoutingSendMap = parseBooleanTable(toml.getTable("chat-routing.send"));
+        Map<String, Boolean> chatRoutingReceiveMap = parseBooleanTable(toml.getTable("chat-routing.receive"));
+        List<Pattern> chatFilterRules = parseRegexRules(toml.getArray("chat-filter.rules"));
 
         return new RuntimeConfig(
                 intValue(toml, "meta.config-version", 1),
@@ -151,15 +171,24 @@ public final class ConfigManager {
                 boolValue(toml, "server-alias.enabled", false),
                 aliasMap,
                 aliasComponentMap,
+                boolValue(toml, "chat-routing.enabled", false),
+                boolValue(toml, "chat-routing.default-send", true),
+                boolValue(toml, "chat-routing.default-receive", true),
+                chatRoutingSendMap,
+                chatRoutingReceiveMap,
+                boolValue(toml, "chat-filter.enabled", false),
+                chatFilterRules,
                 boolValue(toml, "join-leave.enabled", true),
                 stringValue(toml, "join-leave.first-join", "<green>+ <white>{player}</white> <gray>joined <gold>{server}</gold></gray>"),
                 stringValue(toml, "join-leave.switch-server", "<yellow>* <white>{player}</white> <gray>moved <gold>{from}</gold> -> <gold>{to}</gold></gray>"),
                 stringValue(toml, "join-leave.leave", "<red>- <white>{player}</white> <gray>left the network</gray>"),
                 boolValue(toml, "at.enabled", true),
+                boolValue(toml, "at.notify-title-enabled", true),
+                boolValue(toml, "at.notify-message-enabled", true),
+                boolValue(toml, "at.notify-action-bar-enabled", true),
                 stringValue(toml, "at.notify-title", "<gold>@ Mention</gold>"),
                 stringValue(toml, "at.notify-message", "<yellow>{player}</yellow> <gray>mentioned you:</gray> <white>{message}</white>"),
-                stringValue(toml, "at.notify-action-bar", "<gold>@{player}</gold> <white>{message}</white>"),
-                boolValue(toml, "at.sound-enabled", true)
+                stringValue(toml, "at.notify-action-bar", "<gold>@{player}</gold> <white>{message}</white>")
         );
     }
 
@@ -171,7 +200,7 @@ public final class ConfigManager {
                 stringValue(toml, "messages.reload-failed", "<red>Reload failed. Check console logs.</red>"),
                 stringValue(toml, "messages.reload-usage", "<yellow>Usage: /proxychat reload or /pc reload</yellow>"),
                 stringValue(toml, "messages.no-permission", "<red>You do not have permission.</red>"),
-                stringValue(toml, "messages.at-usage", "<yellow>Usage: /at <player> <message></yellow>"),
+                stringValue(toml, "messages.at-usage", "<yellow>Usage: /at [player] [optional message]</yellow>"),
                 stringValue(toml, "messages.at-disabled", "<red>AT feature is disabled.</red>"),
                 stringValue(toml, "messages.player-not-found", "<red>Player not found: {player}</red>"),
                 stringValue(toml, "messages.update-available", "<yellow>New version available: <white>{current}</white> -> <green>{latest}</green></yellow>"),
@@ -211,5 +240,95 @@ public final class ConfigManager {
     private static String stringValue(TomlParseResult toml, String key, String defaultValue) {
         String value = toml.getString(key);
         return value == null ? defaultValue : value;
+    }
+
+    private Component parseAliasComponent(String aliasKey, String rawAlias) {
+        if (rawAlias == null || rawAlias.isBlank()) {
+            return Component.text(aliasKey);
+        }
+        try {
+            return miniMessage.deserialize(rawAlias);
+        } catch (Exception ex) {
+            pluginLogger.warn(
+                    PluginLogger.Topic.CONFIG,
+                    "Invalid MiniMessage in server-alias.map.{}: {}",
+                    aliasKey,
+                    ex.getMessage()
+            );
+            return Component.text(rawAlias);
+        }
+    }
+
+    private Map<String, Boolean> parseBooleanTable(TomlTable table) {
+        Map<String, Boolean> output = new LinkedHashMap<>();
+        if (table == null) {
+            return output;
+        }
+
+        for (String key : table.keySet()) {
+            Object value = table.get(key);
+            if (value instanceof Boolean boolValue) {
+                output.put(key.toLowerCase(Locale.ROOT), boolValue);
+            }
+        }
+        return output;
+    }
+
+    private List<Pattern> parseRegexRules(TomlArray ruleArray) {
+        List<Pattern> output = new ArrayList<>();
+        if (ruleArray == null) {
+            return output;
+        }
+
+        for (int i = 0; i < ruleArray.size(); i++) {
+            Object value = ruleArray.get(i);
+            if (!(value instanceof String regex) || regex.isBlank()) {
+                continue;
+            }
+
+            try {
+                output.add(Pattern.compile(regex));
+            } catch (PatternSyntaxException ex) {
+                pluginLogger.warn(PluginLogger.Topic.CONFIG, "Invalid chat filter regex at index {}: {}", i, ex.getMessage());
+            }
+        }
+        return output;
+    }
+
+    private static String normalizePlaceholderSyntax(
+            String template,
+            Map<String, String> placeholders,
+            Map<String, Component> componentPlaceholders
+    ) {
+        Set<String> keys = new LinkedHashSet<>();
+        keys.addAll(placeholders.keySet());
+        keys.addAll(componentPlaceholders.keySet());
+
+        String output = template;
+        for (String key : keys) {
+            output = output.replace("{" + key + "}", "<" + key + ">");
+        }
+        return output;
+    }
+
+    private String renderPlainFallback(
+            String template,
+            Map<String, String> placeholders,
+            Map<String, Component> componentPlaceholders
+    ) {
+        String output = template;
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            String value = entry.getValue() == null ? "" : entry.getValue();
+            output = output.replace("{" + entry.getKey() + "}", value)
+                    .replace("<" + entry.getKey() + ">", value);
+        }
+        for (Map.Entry<String, Component> entry : componentPlaceholders.entrySet()) {
+            String value = entry.getValue() == null
+                    ? ""
+                    : PlainTextComponentSerializer.plainText().serialize(entry.getValue());
+            output = output.replace("{" + entry.getKey() + "}", value)
+                    .replace("<" + entry.getKey() + ">", value);
+        }
+        return miniMessage.stripTags(output);
     }
 }

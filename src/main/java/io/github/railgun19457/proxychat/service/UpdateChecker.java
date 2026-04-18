@@ -1,5 +1,8 @@
 package io.github.railgun19457.proxychat.service;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import io.github.railgun19457.proxychat.Permissions;
@@ -8,7 +11,6 @@ import io.github.railgun19457.proxychat.model.MessageConfig;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
-import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -18,40 +20,54 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public final class UpdateChecker {
     private static final String RELEASE_API_URL = "https://api.github.com/repos/railgun19457/ProxyChat/releases/latest";
-    private static final Pattern TAG_PATTERN = Pattern.compile("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
 
+    private final Object pluginInstance;
     private final ProxyServer proxyServer;
-    private final Logger logger;
+    private final PluginLogger pluginLogger;
     private final ConfigManager configManager;
     private final String currentVersion;
 
-    public UpdateChecker(ProxyServer proxyServer, Logger logger, ConfigManager configManager, String currentVersion) {
+    public UpdateChecker(
+            Object pluginInstance,
+            ProxyServer proxyServer,
+            PluginLogger pluginLogger,
+            ConfigManager configManager,
+            String currentVersion
+    ) {
+        this.pluginInstance = Objects.requireNonNull(pluginInstance, "pluginInstance");
         this.proxyServer = proxyServer;
-        this.logger = logger;
+        this.pluginLogger = pluginLogger;
         this.configManager = configManager;
         this.currentVersion = currentVersion;
     }
 
     public void checkAsync() {
-        CompletableFuture.runAsync(this::checkNow);
+        proxyServer.getScheduler()
+                .buildTask(pluginInstance, this::checkNow)
+                .delay(5, TimeUnit.SECONDS)
+                .schedule();
+        pluginLogger.debug(PluginLogger.Topic.UPDATE, "Scheduled update check task via Velocity scheduler.");
     }
 
     private void checkNow() {
         RuntimeConfig runtime = configManager.runtime();
         if (!runtime.updateCheck()) {
+            pluginLogger.debug(PluginLogger.Topic.UPDATE, "Skipped update check because update.check=false.");
             return;
         }
 
         try {
             String latestVersion = fetchLatestVersion();
             if (latestVersion == null || latestVersion.isBlank()) {
-                configManager.debug("Update check response did not contain a tag name.");
+                pluginLogger.debug(PluginLogger.Topic.UPDATE, "Update check response did not contain a tag name.");
                 return;
             }
 
@@ -64,11 +80,11 @@ public final class UpdateChecker {
                     "current", currentVersion,
                     "latest", latestVersion
                 ));
-                configManager.debug("{}", PlainTextComponentSerializer.plainText().serialize(noNeedMessage));
+                pluginLogger.debug(PluginLogger.Topic.UPDATE, "{}", PlainTextComponentSerializer.plainText().serialize(noNeedMessage));
                 return;
             }
 
-            logger.info("[ProxyChat] Update available: {} -> {}", currentVersion, latestVersion);
+            pluginLogger.info(PluginLogger.Topic.UPDATE, "Update available: {} -> {}", currentVersion, latestVersion);
             MessageConfig messages = configManager.messages();
             Component updateMessage = configManager.render(messages.updateAvailable(), Map.of(
                     "current", currentVersion,
@@ -76,23 +92,22 @@ public final class UpdateChecker {
             ));
 
             if (runtime.updateNotifyAdmins()) {
+                int notified = 0;
                 for (Player player : proxyServer.getAllPlayers()) {
                     if (player.hasPermission(Permissions.UPDATE_NOTIFY)) {
                         player.sendMessage(updateMessage);
+                        notified++;
                     }
                 }
+                pluginLogger.debug(PluginLogger.Topic.UPDATE, "Sent update notification to {} online admins.", notified);
             }
         } catch (Exception ex) {
-            logger.warn("[ProxyChat] Update check failed: {}", ex.getMessage());
-            configManager.debug("Update check exception: {}", ex.toString());
+            pluginLogger.warn(PluginLogger.Topic.UPDATE, "Update check failed: {}", ex.getMessage());
+            pluginLogger.debug(PluginLogger.Topic.UPDATE, "Update check exception:", ex);
         }
     }
 
     private String fetchLatestVersion() throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
-
         HttpRequest request = HttpRequest.newBuilder(URI.create(RELEASE_API_URL))
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "ProxyChat")
@@ -100,16 +115,29 @@ public final class UpdateChecker {
                 .GET()
                 .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IOException("Unexpected status code: " + response.statusCode());
         }
 
-        Matcher matcher = TAG_PATTERN.matcher(response.body());
-        if (!matcher.find()) {
+        JsonElement rootElement;
+        try {
+            rootElement = JsonParser.parseString(response.body());
+        } catch (Exception ex) {
+            throw new IOException("Failed to parse GitHub release response as JSON.", ex);
+        }
+        if (!rootElement.isJsonObject()) {
             return null;
         }
-        return matcher.group(1);
+
+        JsonObject root = rootElement.getAsJsonObject();
+        JsonElement tagElement = root.get("tag_name");
+        if (tagElement == null || tagElement.isJsonNull()) {
+            return null;
+        }
+
+        String tagName = tagElement.getAsString();
+        return tagName == null || tagName.isBlank() ? null : tagName;
     }
 
     private static String normalizeVersion(String version) {

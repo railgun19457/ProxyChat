@@ -1,5 +1,4 @@
 # ProxyChat 主配置文件。
-# 这里放开关、模板、别名和运行模式，文案请放到 message.toml。
 
 [meta]
 # 配置版本占位，后续升级时可用于迁移。
@@ -20,17 +19,45 @@ debug = false
 [chat]
 # 跨服聊天总开关。
 enabled = true
-# 跨服聊天模板。支持 MiniMessage，占位符有 {server}、{player}、{message}。
+# 跨服聊天模板。支持 MiniMessage。
+# 占位符支持两种写法：{server}/{player}/{message} 或 <server>/<player>/<message>。
 format = "<gray>[{server}]</gray> <white>{player}</white><dark_gray>:</dark_gray> <white>{message}</white>"
+
+[chat-routing]
+# 是否启用按子服控制发送/接收的路由规则。
+enabled = false
+# 未在发送规则表里定义的子服，默认是否允许向外发送跨服消息。
+default-send = true
+# 未在接收规则表里定义的子服，默认是否允许接收跨服消息。
+default-receive = true
+
+[chat-routing.send]
+# 示例：设置为 false 后，该子服可以接收但不能向外转发。
+# skyblock = false
+# lobby = true
+
+[chat-routing.receive]
+# 示例：设置为 false 后，该子服可以发送但不接收。
+# lobby = false
+# survival = true
+
+[chat-filter]
+# 是否启用正则过滤；命中规则的聊天将不进行跨服转发。
+enabled = false
+# 支持多条规则，按顺序匹配，命中任意一条即拦截转发。
+rules = [
+	"(?i)^test$",
+	".*屏蔽词.*"
+]
 
 [server-alias]
 # 是否启用子服务器别名。
-enabled = false
+enabled = true
 
 [server-alias.map]
 # 这里把真实子服名映射成对玩家展示的名称，值支持 MiniMessage。
-lobby = "<gold>Lobby</gold>"
-survival = "<green>Survival</green>"
+lobby = "<gold>大厅</gold>"
+survival = "<green>生存</green>"
 
 [join-leave]
 # 进服、切服和离服通知总开关。
@@ -40,16 +67,20 @@ first-join = "<green>+ <white>{player}</white> <gray>进入了 <gold>{server}</g
 # 切换子服时的广播模板，占位符有 {from} 和 {to}。
 switch-server = "<yellow>* <white>{player}</white> <gray>从 <gold>{from}</gold> 切换到 <gold>{to}</gold></gray>"
 # 离开群组服时的广播模板。
-leave = "<red>- <white>{player}</white> <gray>离开了网络</gray>"
+leave = "<red>- <white>{player}</white> <gray>离开了游戏</gray>"
 
 [at]
 # AT 功能总开关。
 enabled = true
+# 是否发送标题提醒。
+notify-title-enabled = true
+# 是否发送聊天消息提醒。
+notify-message-enabled = true
+# 是否发送动作栏提醒。
+notify-action-bar-enabled = false
 # 被点名玩家看到的标题。
 notify-title = "<gold>@ 提醒</gold>"
 # 被点名玩家看到的聊天提示。
-notify-message = "<yellow>{player}</yellow> <gray>点名你:</gray> <white>{message}</white>"
+notify-message = "<yellow>{player}</yellow> <gray>@了你:</gray> <white>{message}</white>"
 # 被点名玩家的动作栏提示，可留空关闭。
-notify-action-bar = "<gold>@{player}</gold> <white>{message}</white>"
-# 是否播放提示音。
-sound-enabled = true
+notify-action-bar = "<yellow>{player}</yellow> <gray>@了你:</gray> <white>{message}</white>"

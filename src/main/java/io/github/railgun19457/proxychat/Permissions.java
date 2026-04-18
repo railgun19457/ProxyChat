@@ -1,6 +1,7 @@
 package io.github.railgun19457.proxychat;
 
 import com.velocitypowered.api.command.CommandSource;
+import com.velocitypowered.api.permission.Tristate;
 import com.velocitypowered.api.proxy.Player;
 
 public final class Permissions {
@@ -12,7 +13,10 @@ public final class Permissions {
     }
 
     public static boolean canUseAt(CommandSource source) {
-        return source instanceof Player || source.hasPermission(COMMAND_AT);
+        if (!(source instanceof Player)) {
+            return true;
+        }
+        return source.getPermissionValue(COMMAND_AT) != Tristate.FALSE;
     }
 
     public static boolean canUseReload(CommandSource source) {

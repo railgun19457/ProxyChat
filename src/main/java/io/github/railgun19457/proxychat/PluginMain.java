@@ -7,6 +7,7 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
+import io.github.railgun19457.proxychat.service.PluginLogger;
 import io.github.railgun19457.proxychat.service.UpdateChecker;
 import org.slf4j.Logger;
 
@@ -22,10 +23,10 @@ import java.nio.file.Path;
 )
 public final class PluginMain {
     public static final String PLUGIN_ID = "proxychat";
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = BuildConstants.VERSION;
 
     private final ProxyServer proxyServer;
-    private final Logger logger;
+    private final PluginLogger pluginLogger;
     private final Path dataDirectory;
 
     private ConfigManager configManager;
@@ -33,27 +34,27 @@ public final class PluginMain {
     @Inject
     public PluginMain(ProxyServer proxyServer, Logger logger, @DataDirectory Path dataDirectory) {
         this.proxyServer = proxyServer;
-        this.logger = logger;
+        this.pluginLogger = new PluginLogger(logger);
         this.dataDirectory = dataDirectory;
     }
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
-        this.configManager = new ConfigManager(logger, dataDirectory);
+        this.configManager = new ConfigManager(pluginLogger, dataDirectory);
         try {
             this.configManager.initialize();
         } catch (IOException ex) {
-            logger.error("[ProxyChat] Failed to initialize configuration files.", ex);
+            pluginLogger.error(PluginLogger.Topic.CONFIG, "Failed to initialize configuration files.", ex);
             return;
         }
 
-        proxyServer.getEventManager().register(this, new ChatListener(proxyServer, logger, configManager));
+        proxyServer.getEventManager().register(this, new ChatListener(proxyServer, pluginLogger, configManager));
         registerCommands();
 
-        UpdateChecker updateChecker = new UpdateChecker(proxyServer, logger, configManager, VERSION);
+        UpdateChecker updateChecker = new UpdateChecker(this, proxyServer, pluginLogger, configManager, VERSION);
         updateChecker.checkAsync();
 
-        logger.info("[ProxyChat] Enabled successfully. Version={}", VERSION);
+        pluginLogger.info(PluginLogger.Topic.LIFECYCLE, "Enabled successfully. version={}", VERSION);
     }
 
     private void registerCommands() {
@@ -64,14 +65,16 @@ public final class PluginMain {
                 .aliases("pc")
                         .plugin(this)
                         .build(),
-                new ReloadCommand(configManager)
+                new ReloadCommand(configManager, pluginLogger)
         );
 
         commandManager.register(
                 commandManager.metaBuilder("at")
                         .plugin(this)
                         .build(),
-                new AtCommand(proxyServer, configManager)
+                new AtCommand(proxyServer, configManager, pluginLogger)
         );
+
+        pluginLogger.info(PluginLogger.Topic.LIFECYCLE, "Commands registered: /proxychat, /pc, /at");
     }
 }

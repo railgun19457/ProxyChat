@@ -10,9 +10,8 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.ServerConnection;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
+import io.github.railgun19457.proxychat.service.PluginLogger;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
-import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,12 +19,12 @@ import java.util.Optional;
 
 public final class ChatListener {
     private final ProxyServer proxyServer;
-    private final Logger logger;
+    private final PluginLogger pluginLogger;
     private final ConfigManager configManager;
 
-    public ChatListener(ProxyServer proxyServer, Logger logger, ConfigManager configManager) {
+    public ChatListener(ProxyServer proxyServer, PluginLogger pluginLogger, ConfigManager configManager) {
         this.proxyServer = proxyServer;
-        this.logger = logger;
+        this.pluginLogger = pluginLogger;
         this.configManager = configManager;
     }
 
@@ -44,6 +43,17 @@ public final class ChatListener {
                 .map(connection -> connection.getServerInfo().getName())
                 .orElse("unknown");
 
+        if (!runtime.canServerSendChat(serverName)) {
+            configManager.debug("Chat forwarding blocked by send routing. server={}, player={}", serverName, player.getUsername());
+            return;
+        }
+
+        String message = event.getResult().getMessage().orElse(event.getMessage());
+        if (runtime.shouldBlockForwarding(message)) {
+            configManager.debug("Chat forwarding blocked by regex rule. server={}, player={}", serverName, player.getUsername());
+            return;
+        }
+
         String template = runtime.chatFormat();
         if (template.isBlank()) {
             return;
@@ -53,14 +63,12 @@ public final class ChatListener {
         Map<String, Component> componentPlaceholders = new HashMap<>();
         componentPlaceholders.put("server", runtime.resolveServerAliasComponent(serverName));
         placeholders.put("player", player.getUsername());
-        placeholders.put("message", event.getResult().getMessage().orElse(event.getMessage()));
+        placeholders.put("message", message);
 
         Component rendered = configManager.render(template, placeholders, componentPlaceholders);
-        broadcastToOtherServers(player, rendered);
+        broadcastToOtherServers(player, rendered, runtime);
 
-        if (runtime.loggingPrintChat()) {
-            logger.info("{}", PlainTextComponentSerializer.plainText().serialize(rendered));
-        }
+        pluginLogger.printChat(rendered);
     }
 
     @Subscribe
@@ -85,6 +93,12 @@ public final class ChatListener {
                 return;
             }
             broadcast(configManager.render(runtime.joinFirst(), placeholders, componentPlaceholders));
+            pluginLogger.debug(
+                    PluginLogger.Topic.CHAT,
+                    "Broadcasted first-join. player={}, server={}",
+                    player.getUsername(),
+                    currentServerRaw
+            );
         } else {
             String fromRaw = previousServer.get().getServerInfo().getName();
             if (fromRaw.equalsIgnoreCase(currentServerRaw)) {
@@ -96,6 +110,13 @@ public final class ChatListener {
                 return;
             }
             broadcast(configManager.render(runtime.joinSwitch(), placeholders, componentPlaceholders));
+            pluginLogger.debug(
+                    PluginLogger.Topic.CHAT,
+                    "Broadcasted server-switch. player={}, from={}, to={}",
+                    player.getUsername(),
+                    fromRaw,
+                    currentServerRaw
+            );
         }
     }
 
@@ -122,6 +143,12 @@ public final class ChatListener {
         placeholders.put("player", player.getUsername());
         componentPlaceholders.put("server", runtime.resolveServerAliasComponent(currentServer.get().getServerInfo().getName()));
         broadcast(configManager.render(template, placeholders, componentPlaceholders));
+        pluginLogger.debug(
+            PluginLogger.Topic.CHAT,
+            "Broadcasted leave. player={}, server={}",
+            player.getUsername(),
+            currentServer.get().getServerInfo().getName()
+        );
     }
 
     private void broadcast(Component component) {
@@ -130,7 +157,7 @@ public final class ChatListener {
         }
     }
 
-    private void broadcastToOtherServers(Player sourcePlayer, Component component) {
+    private void broadcastToOtherServers(Player sourcePlayer, Component component, RuntimeConfig runtime) {
         String sourceServerName = sourcePlayer.getCurrentServer()
                 .map(connection -> connection.getServerInfo().getName())
                 .orElse("");
@@ -140,6 +167,9 @@ public final class ChatListener {
                     .map(connection -> connection.getServerInfo().getName())
                     .orElse("");
             if (!sourceServerName.isBlank() && sourceServerName.equalsIgnoreCase(onlineServerName)) {
+                continue;
+            }
+            if (!runtime.canServerReceiveChat(onlineServerName)) {
                 continue;
             }
             online.sendMessage(component);
