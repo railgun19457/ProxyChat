@@ -16,7 +16,7 @@ public final class ReloadCommand implements SimpleCommand {
     @Override
     public void execute(Invocation invocation) {
         MessageConfig messageConfig = configManager.messages();
-        if (!invocation.source().hasPermission(Permissions.COMMAND_RELOAD)) {
+        if (!Permissions.canUseReload(invocation.source())) {
             invocation.source().sendMessage(configManager.render(messageConfig.noPermission(), Map.of()));
             return;
         }
@@ -35,7 +35,7 @@ public final class ReloadCommand implements SimpleCommand {
 
     @Override
     public boolean hasPermission(Invocation invocation) {
-        return invocation.source().hasPermission(Permissions.COMMAND_RELOAD);
+        return Permissions.canUseReload(invocation.source());
     }
 
     @Override

@@ -32,7 +32,7 @@ public final class AtCommand implements SimpleCommand {
         CommandSource source = invocation.source();
         MessageConfig messages = configManager.messages();
 
-        if (!source.hasPermission(Permissions.COMMAND_AT)) {
+        if (!Permissions.canUseAt(source)) {
             source.sendMessage(configManager.render(messages.noPermission(), Map.of()));
             return;
         }
@@ -111,6 +111,6 @@ public final class AtCommand implements SimpleCommand {
 
     @Override
     public boolean hasPermission(Invocation invocation) {
-        return invocation.source().hasPermission(Permissions.COMMAND_AT);
+        return Permissions.canUseAt(invocation.source());
     }
 }

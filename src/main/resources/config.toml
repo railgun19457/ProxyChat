@@ -28,9 +28,9 @@ format = "<gray>[{server}]</gray> <white>{player}</white><dark_gray>:</dark_gray
 enabled = false
 
 [server-alias.map]
-# 这里把真实子服名映射成对玩家展示的名称。
-lobby = "Lobby"
-survival = "Survival"
+# 这里把真实子服名映射成对玩家展示的名称，值支持 MiniMessage。
+lobby = "<gold>Lobby</gold>"
+survival = "<green>Survival</green>"
 
 [join-leave]
 # 进服、切服和离服通知总开关。

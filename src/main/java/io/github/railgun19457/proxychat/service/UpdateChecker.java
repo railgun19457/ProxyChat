@@ -7,6 +7,7 @@ import io.github.railgun19457.proxychat.ConfigManager;
 import io.github.railgun19457.proxychat.model.MessageConfig;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -59,10 +60,11 @@ public final class UpdateChecker {
 
             if (compareVersions(latestNormalized, currentNormalized) <= 0) {
                 MessageConfig messages = configManager.messages();
-                configManager.debug("{}", configManager.applyPlaceholders(messages.updateNoNeed(), Map.of(
-                        "current", currentVersion,
-                        "latest", latestVersion
-                )));
+                Component noNeedMessage = configManager.render(messages.updateNoNeed(), Map.of(
+                    "current", currentVersion,
+                    "latest", latestVersion
+                ));
+                configManager.debug("{}", PlainTextComponentSerializer.plainText().serialize(noNeedMessage));
                 return;
             }
 

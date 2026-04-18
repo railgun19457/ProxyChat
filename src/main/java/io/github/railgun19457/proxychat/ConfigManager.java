@@ -4,6 +4,8 @@ import io.github.railgun19457.proxychat.model.MessageConfig;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.slf4j.Logger;
 import org.tomlj.Toml;
 import org.tomlj.TomlParseError;
@@ -16,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -73,21 +77,30 @@ public final class ConfigManager {
     }
 
     public Component render(String template, Map<String, String> placeholders) {
-        String resolved = applyPlaceholders(template, placeholders);
-        return miniMessage.deserialize(resolved);
+        return render(template, placeholders, Map.of());
     }
 
-    public String applyPlaceholders(String template, Map<String, String> placeholders) {
+    public Component render(String template, Map<String, String> placeholders, Map<String, Component> componentPlaceholders) {
         String content = template == null ? "" : template;
-        if (placeholders == null || placeholders.isEmpty()) {
-            return content;
+        List<TagResolver> resolvers = new ArrayList<>();
+
+        if (placeholders != null) {
+            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+                resolvers.add(Placeholder.unparsed(entry.getKey(), entry.getValue() == null ? "" : entry.getValue()));
+            }
         }
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            String key = "{" + entry.getKey() + "}";
-            String value = entry.getValue() == null ? "" : miniMessage.escapeTags(entry.getValue());
-            content = content.replace(key, value);
+
+        if (componentPlaceholders != null) {
+            for (Map.Entry<String, Component> entry : componentPlaceholders.entrySet()) {
+                resolvers.add(Placeholder.component(entry.getKey(), entry.getValue() == null ? Component.empty() : entry.getValue()));
+            }
         }
-        return content;
+
+        if (resolvers.isEmpty()) {
+            return miniMessage.deserialize(content);
+        }
+
+        return miniMessage.deserialize(content, TagResolver.resolver(resolvers));
     }
 
     public void debug(String message, Object... args) {
@@ -115,12 +128,14 @@ public final class ConfigManager {
         TomlParseResult toml = parseToml(path);
 
         Map<String, String> aliasMap = new LinkedHashMap<>();
+        Map<String, Component> aliasComponentMap = new LinkedHashMap<>();
         TomlTable table = toml.getTable("server-alias.map");
         if (table != null) {
             for (String key : table.keySet()) {
                 Object value = table.get(key);
                 if (value instanceof String str) {
                     aliasMap.put(key, str);
+                    aliasComponentMap.put(key, str.isBlank() ? Component.text(key) : miniMessage.deserialize(str));
                 }
             }
         }
@@ -135,6 +150,7 @@ public final class ConfigManager {
                 stringValue(toml, "chat.format", "<white>{player}</white>: <white>{message}</white>"),
                 boolValue(toml, "server-alias.enabled", false),
                 aliasMap,
+                aliasComponentMap,
                 boolValue(toml, "join-leave.enabled", true),
                 stringValue(toml, "join-leave.first-join", "<green>+ <white>{player}</white> <gray>joined <gold>{server}</gold></gray>"),
                 stringValue(toml, "join-leave.switch-server", "<yellow>* <white>{player}</white> <gray>moved <gold>{from}</gold> -> <gold>{to}</gold></gray>"),

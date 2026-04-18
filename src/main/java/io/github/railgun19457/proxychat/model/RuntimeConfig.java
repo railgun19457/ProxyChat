@@ -1,5 +1,8 @@
 package io.github.railgun19457.proxychat.model;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,6 +17,7 @@ public record RuntimeConfig(
         String chatFormat,
         boolean serverAliasEnabled,
         Map<String, String> serverAliasMap,
+        Map<String, Component> serverAliasComponentMap,
         boolean joinLeaveEnabled,
         String joinFirst,
         String joinSwitch,
@@ -26,6 +30,7 @@ public record RuntimeConfig(
 ) {
     public RuntimeConfig {
         serverAliasMap = Collections.unmodifiableMap(new LinkedHashMap<>(serverAliasMap));
+        serverAliasComponentMap = Collections.unmodifiableMap(new LinkedHashMap<>(serverAliasComponentMap));
         chatFormat = chatFormat == null ? "" : chatFormat;
         joinFirst = joinFirst == null ? "" : joinFirst;
         joinSwitch = joinSwitch == null ? "" : joinSwitch;
@@ -36,12 +41,16 @@ public record RuntimeConfig(
     }
 
     public String resolveServerAlias(String serverName) {
+        return PlainTextComponentSerializer.plainText().serialize(resolveServerAliasComponent(serverName));
+    }
+
+    public Component resolveServerAliasComponent(String serverName) {
         if (serverName == null || serverName.isBlank()) {
-            return "unknown";
+            return Component.text("unknown");
         }
         if (!serverAliasEnabled) {
-            return serverName;
+            return Component.text(serverName);
         }
-        return serverAliasMap.getOrDefault(serverName, serverName);
+        return serverAliasComponentMap.getOrDefault(serverName, Component.text(serverName));
     }
 }
