@@ -64,7 +64,3 @@ ProxyChat 是一个运行在 Velocity 上的跨服聊天插件，提供跨子服
 构建产物位于：
 
 - `build/libs/ProxyChat-<version>.jar`
-
-## 许可证
-
-建议使用 MIT License。

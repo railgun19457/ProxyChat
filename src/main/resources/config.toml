@@ -21,7 +21,7 @@ debug = false
 enabled = true
 # 跨服聊天模板。支持 MiniMessage。
 # 占位符支持两种写法：{server}/{player}/{message} 或 <server>/<player>/<message>。
-format = "<gray>[{server}]</gray> <white>{player}</white><dark_gray>:</dark_gray> <white>{message}</white>"
+format = "<gray>[{server}]</gray> <white><{player}></white> <white>{message}</white>"
 
 [chat-routing]
 # 是否启用按子服控制发送/接收的路由规则。
@@ -55,17 +55,19 @@ rules = [
 enabled = true
 
 [server-alias.map]
-# 这里把真实子服名映射成对玩家展示的名称，值支持 MiniMessage。
-lobby = "<gold>大厅</gold>"
-survival = "<green>生存</green>"
+# 这里把真实子服名映射成对玩家展示的名称，支持 MiniMessage。
+lobby = "<hover:show_text:'点击切换'><click:suggest_command:'/server lobby'><light_purple>大厅</light_purple></click></hover>"
+survival = "<hover:show_text:'点击切换'><click:suggest_command:'/server survival'><blue>生存服</blue></click></hover>"
+creative = "<hover:show_text:'点击切换'><click:suggest_command:'/server creative'><green>创造服</green></click></hover>"
+minigames = "<hover:show_text:'点击切换'><click:suggest_command:'/server minigames'><gold>小游戏</gold></click></hover>"
 
 [join-leave]
 # 进服、切服和离服通知总开关。
 enabled = true
 # 首次进入群组服时的广播模板。
-first-join = "<green>+ <white>{player}</white> <gray>进入了 <gold>{server}</gold></gray>"
+first-join = "<green>+ <white>{player}</white> <gray>进入了 <gray>[{server}]</gray></gray>"
 # 切换子服时的广播模板，占位符有 {from} 和 {to}。
-switch-server = "<yellow>* <white>{player}</white> <gray>从 <gold>{from}</gold> 切换到 <gold>{to}</gold></gray>"
+switch-server = "<white>{player}</white> <gray>从 <gray>[{from}]</gray> 切换到 <gray>[{to}]</gray></gray>"
 # 离开群组服时的广播模板。
 leave = "<red>- <white>{player}</white> <gray>离开了游戏</gray>"
 
@@ -81,6 +83,6 @@ notify-action-bar-enabled = false
 # 被点名玩家看到的标题。
 notify-title = "<gold>@ 提醒</gold>"
 # 被点名玩家看到的聊天提示。
-notify-message = "<yellow>{player}</yellow> <gray>@了你:</gray> <white>{message}</white>"
+notify-message = "<click:suggest_command:'/at '><yellow>{player}</yellow></click> <gray>@了你:</gray> <white>{message}</white>"
 # 被点名玩家的动作栏提示，可留空关闭。
 notify-action-bar = "<yellow>{player}</yellow> <gray>@了你:</gray> <white>{message}</white>"
