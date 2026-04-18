@@ -9,7 +9,6 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.ServerConnection;
-import io.github.railgun19457.proxychat.model.MessageConfig;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -40,19 +39,16 @@ public final class ChatListener {
             return;
         }
 
-        event.setResult(PlayerChatEvent.ChatResult.denied());
-
         Player player = event.getPlayer();
         String serverName = player.getCurrentServer()
                 .map(connection -> connection.getServerInfo().getName())
                 .orElse("unknown");
 
-        MessageConfig messages = configManager.messages();
-        String template = pickTemplate(messages.chatFormat(), runtime.chatFormat());
+        String template = runtime.chatFormat();
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("server", configManager.resolveServerName(serverName));
         placeholders.put("player", player.getUsername());
-        placeholders.put("message", event.getMessage());
+        placeholders.put("message", event.getResult().getMessage().orElse(event.getMessage()));
 
         Component rendered = configManager.render(template, placeholders);
         broadcast(rendered);
@@ -73,17 +69,14 @@ public final class ChatListener {
         RegisteredServer currentConnection = event.getServer();
         String currentServerRaw = currentConnection.getServerInfo().getName();
         String currentServer = configManager.resolveServerName(currentServerRaw);
-
-        MessageConfig messages = configManager.messages();
         Optional<RegisteredServer> previousServer = event.getPreviousServer();
 
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("player", player.getUsername());
         placeholders.put("server", currentServer);
 
-        String template;
         if (previousServer.isEmpty()) {
-            template = pickTemplate(messages.joinFirst(), runtime.joinFirst());
+            broadcast(configManager.render(runtime.joinFirst(), placeholders));
         } else {
             String fromRaw = previousServer.get().getServerInfo().getName();
             if (fromRaw.equalsIgnoreCase(currentServerRaw)) {
@@ -91,14 +84,8 @@ public final class ChatListener {
             }
             placeholders.put("from", configManager.resolveServerName(fromRaw));
             placeholders.put("to", currentServer);
-            template = pickTemplate(messages.joinSwitch(), runtime.joinSwitch());
+            broadcast(configManager.render(runtime.joinSwitch(), placeholders));
         }
-
-        if (template.isBlank()) {
-            return;
-        }
-
-        broadcast(configManager.render(template, placeholders));
     }
 
     @Subscribe
@@ -114,8 +101,7 @@ public final class ChatListener {
             return;
         }
 
-        MessageConfig messages = configManager.messages();
-        String template = pickTemplate(messages.leave(), runtime.joinLeave());
+        String template = runtime.joinLeave();
         if (template.isBlank()) {
             return;
         }
@@ -130,12 +116,5 @@ public final class ChatListener {
         for (Player online : proxyServer.getAllPlayers()) {
             online.sendMessage(component);
         }
-    }
-
-    private static String pickTemplate(String preferred, String fallback) {
-        if (preferred != null && !preferred.isBlank()) {
-            return preferred;
-        }
-        return fallback == null ? "" : fallback;
     }
 }

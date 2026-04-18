@@ -19,8 +19,6 @@ import java.util.Map;
 import java.util.Optional;
 
 public final class AtCommand implements SimpleCommand {
-    public static final String PERMISSION = "proxychat.at";
-
     private final ProxyServer proxyServer;
     private final ConfigManager configManager;
 
@@ -34,7 +32,7 @@ public final class AtCommand implements SimpleCommand {
         CommandSource source = invocation.source();
         MessageConfig messages = configManager.messages();
 
-        if (!source.hasPermission(PERMISSION)) {
+        if (!source.hasPermission(Permissions.COMMAND_AT)) {
             source.sendMessage(configManager.render(messages.noPermission(), Map.of()));
             return;
         }
@@ -67,12 +65,12 @@ public final class AtCommand implements SimpleCommand {
         placeholders.put("target", target.getUsername());
         placeholders.put("message", rawMessage);
 
-        String notifyTemplate = pickTemplate(runtime.atNotifyMessage(), messages.atReceivedMessage());
+        String notifyTemplate = runtime.atNotifyMessage();
         if (!notifyTemplate.isBlank()) {
             target.sendMessage(configManager.render(notifyTemplate, placeholders));
         }
 
-        String titleTemplate = pickTemplate(runtime.atNotifyTitle(), messages.atReceivedTitle());
+        String titleTemplate = runtime.atNotifyTitle();
         if (!titleTemplate.isBlank()) {
             target.showTitle(Title.title(
                     configManager.render(titleTemplate, placeholders),
@@ -113,13 +111,6 @@ public final class AtCommand implements SimpleCommand {
 
     @Override
     public boolean hasPermission(Invocation invocation) {
-        return invocation.source().hasPermission(PERMISSION);
-    }
-
-    private static String pickTemplate(String preferred, String fallback) {
-        if (preferred != null && !preferred.isBlank()) {
-            return preferred;
-        }
-        return fallback == null ? "" : fallback;
+        return invocation.source().hasPermission(Permissions.COMMAND_AT);
     }
 }

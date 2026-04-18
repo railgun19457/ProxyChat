@@ -153,19 +153,14 @@ public final class ConfigManager {
         return new MessageConfig(
                 stringValue(toml, "messages.reload-success", "<green>ProxyChat reloaded.</green>"),
                 stringValue(toml, "messages.reload-failed", "<red>Reload failed. Check console logs.</red>"),
+                stringValue(toml, "messages.reload-usage", "<yellow>Usage: /proxychat reload or /pc reload</yellow>"),
                 stringValue(toml, "messages.no-permission", "<red>You do not have permission.</red>"),
                 stringValue(toml, "messages.at-usage", "<yellow>Usage: /at <player> <message></yellow>"),
                 stringValue(toml, "messages.at-disabled", "<red>AT feature is disabled.</red>"),
                 stringValue(toml, "messages.player-not-found", "<red>Player not found: {player}</red>"),
                 stringValue(toml, "messages.update-available", "<yellow>New version available: <white>{current}</white> -> <green>{latest}</green></yellow>"),
                 stringValue(toml, "messages.update-no-need", "<gray>Already up to date: {current}</gray>"),
-                stringValue(toml, "messages.chat-format", "<white>{player}</white>: <white>{message}</white>"),
-                stringValue(toml, "messages.join-first", "<green>+ <white>{player}</white> joined <gold>{server}</gold></green>"),
-                stringValue(toml, "messages.join-switch", "<yellow>* <white>{player}</white> switched <gold>{from}</gold> -> <gold>{to}</gold></yellow>"),
-                stringValue(toml, "messages.leave", "<red>- <white>{player}</white> left the network</red>"),
-                stringValue(toml, "messages.at-sent", "<gray>Mention sent to <yellow>{target}</yellow>.</gray>"),
-                stringValue(toml, "messages.at-received-title", "<gold>@ Mention</gold>"),
-                stringValue(toml, "messages.at-received-message", "<yellow>{player}</yellow> <gray>mentioned you:</gray> <white>{message}</white>")
+                stringValue(toml, "messages.at-sent", "<gray>Mention sent to <yellow>{target}</yellow>.</gray>")
         );
     }
 

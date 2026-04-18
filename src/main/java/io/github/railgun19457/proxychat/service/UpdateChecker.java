@@ -2,6 +2,7 @@ package io.github.railgun19457.proxychat.service;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
+import io.github.railgun19457.proxychat.Permissions;
 import io.github.railgun19457.proxychat.ConfigManager;
 import io.github.railgun19457.proxychat.model.MessageConfig;
 import io.github.railgun19457.proxychat.model.RuntimeConfig;
@@ -74,7 +75,7 @@ public final class UpdateChecker {
 
             if (runtime.updateNotifyAdmins()) {
                 for (Player player : proxyServer.getAllPlayers()) {
-                    if (player.hasPermission("proxychat.admin")) {
+                    if (player.hasPermission(Permissions.UPDATE_NOTIFY)) {
                         player.sendMessage(updateMessage);
                     }
                 }

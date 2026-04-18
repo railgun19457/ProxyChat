@@ -60,8 +60,8 @@ public final class PluginMain {
         CommandManager commandManager = proxyServer.getCommandManager();
 
         commandManager.register(
-                commandManager.metaBuilder("proxychatreload")
-                        .aliases("pcreload")
+            commandManager.metaBuilder("proxychat")
+                .aliases("pc")
                         .plugin(this)
                         .build(),
                 new ReloadCommand(configManager)

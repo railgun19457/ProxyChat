@@ -1,34 +1,55 @@
+# ProxyChat 主配置文件。
+# 这里放开关、模板、别名和运行模式，文案请放到 message.toml。
+
 [meta]
+# 配置版本占位，后续升级时可用于迁移。
 config-version = 1
 
 [update]
+# 是否检查 GitHub Release 更新。
 check = true
+# 是否向拥有权限节点 `proxychat.notify.update` 的玩家发送更新提醒。
 notify-admins = true
 
 [logging]
+# 是否在控制台打印跨服聊天内容。
 print-chat = true
+# 是否输出调试日志。
 debug = false
 
 [chat]
+# 跨服聊天总开关。
 enabled = true
+# 跨服聊天模板。支持 MiniMessage，占位符有 {server}、{player}、{message}。
 format = "<gray>[{server}]</gray> <white>{player}</white><dark_gray>:</dark_gray> <white>{message}</white>"
 
 [server-alias]
+# 是否启用子服务器别名。
 enabled = false
 
 [server-alias.map]
+# 这里把真实子服名映射成对玩家展示的名称。
 lobby = "Lobby"
 survival = "Survival"
 
 [join-leave]
+# 进服、切服和离服通知总开关。
 enabled = true
+# 首次进入群组服时的广播模板。
 first-join = "<green>+ <white>{player}</white> <gray>进入了 <gold>{server}</gold></gray>"
+# 切换子服时的广播模板，占位符有 {from} 和 {to}。
 switch-server = "<yellow>* <white>{player}</white> <gray>从 <gold>{from}</gold> 切换到 <gold>{to}</gold></gray>"
+# 离开群组服时的广播模板。
 leave = "<red>- <white>{player}</white> <gray>离开了网络</gray>"
 
 [at]
+# AT 功能总开关。
 enabled = true
+# 被点名玩家看到的标题。
 notify-title = "<gold>@ 提醒</gold>"
+# 被点名玩家看到的聊天提示。
 notify-message = "<yellow>{player}</yellow> <gray>点名你:</gray> <white>{message}</white>"
+# 被点名玩家的动作栏提示，可留空关闭。
 notify-action-bar = "<gold>@{player}</gold> <white>{message}</white>"
+# 是否播放提示音。
 sound-enabled = true
